@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Breadcrumbs</title>
+<style>
+/* Layout: one column; verdict first, then the map of inferred places, then per-photo cards and the clean-copy step. */
+:root{--bg:#f6f7f5;--panel:#ffffff;--fg:#1d2320;--muted:#5b655f;--line:#dde2de;--accent:#1f6f5c;--loc:#c2410c;--time:#a16207;--dev:#4b5563;--safe:#15803d;--mapbg:#eef2ef}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#121614;--panel:#1a1f1c;--fg:#e7ece9;--muted:#9aa59f;--line:#2c3430;--accent:#5fc3a6;--loc:#fb923c;--time:#facc15;--dev:#a5b4c3;--safe:#4ade80;--mapbg:#161b18;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#121614;--panel:#1a1f1c;--fg:#e7ece9;--muted:#9aa59f;--line:#2c3430;--accent:#5fc3a6;--loc:#fb923c;--time:#facc15;--dev:#a5b4c3;--safe:#4ade80;--mapbg:#161b18;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+.wrap{max-width:1040px;margin:0 auto;padding-block:20px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:18px}
+h1{font-size:28px;margin:0;letter-spacing:-0.01em}
+h2{font-size:18px;margin:0 0 10px;text-wrap:balance}
+.lede{margin:4px 0 0;color:var(--muted);max-width:62ch}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;min-width:0}
+.drop{border:2px dashed var(--line);border-radius:10px;padding:22px;text-align:center;display:grid;gap:10px;justify-items:center}
+.drop.over{border-color:var(--accent)}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+button,.btn{font:inherit;font-weight:600;padding:8px 14px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--fg);cursor:pointer;text-decoration:none;display:inline-block}
+button.primary,.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--bg)}
+button:focus-visible,.btn:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.small{font-size:14px;color:var(--muted)}
+.verdict{font-size:20px;font-weight:650;margin:0;text-wrap:balance}
+.verdict.bad{color:var(--loc)} .verdict.good{color:var(--safe)}
+.places{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:16px}
+@media (max-width:760px){.places{grid-template-columns:minmax(0,1fr)}}
+svg{width:100%;height:auto;background:var(--mapbg);border-radius:8px;display:block}
+.place{border-top:1px solid var(--line);padding:10px 0;display:grid;gap:2px}
+.place:first-child{border-top:none;padding-top:0}
+.tag{display:inline-block;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:2px 8px;border-radius:99px;border:1.5px solid currentColor}
+.tag.loc{color:var(--loc)} .tag.time{color:var(--time)} .tag.dev{color:var(--dev)} .tag.safe{color:var(--safe)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.card{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel);display:grid;grid-template-rows:auto 1fr}
+.card img{width:100%;aspect-ratio:3/2;object-fit:cover;display:block;max-width:100%}
+.card .body{padding:10px;display:grid;gap:6px;align-content:start;font-size:14px;min-width:0}
+.card .name{font-weight:650;overflow-wrap:anywhere}
+.kv{font-variant-numeric:tabular-nums;color:var(--muted);overflow-wrap:anywhere}
+.compare{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+@media (max-width:560px){.compare{grid-template-columns:minmax(0,1fr)}}
+.compare div{border:1px solid var(--line);border-radius:8px;padding:12px}
+.big{font-size:30px;font-weight:700;font-variant-numeric:tabular-nums}
+.mono{font-family:ui-monospace,Consolas,monospace;font-size:13px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+a{color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Breadcrumbs</h1>
+    <p class="lede">Photos carry hidden details: the exact spot where they were taken, the time and your phone model. Put a few photos together and a stranger can work out where you live. Check what yours give away, then make clean copies, before you post or send them.</p>
+  </header>
+
+  <section class="panel" aria-labelledby="h-add">
+    <h2 id="h-add">1. Add photos</h2>
+    <div class="drop" id="drop">
+      <div>Drop JPEG photos here, or</div>
+      <div class="row" style="justify-content:center">
+        <label class="btn primary" for="files">Choose photos</label>
+        <input id="files" type="file" accept="image/*,.heic,.heif" multiple class="sr">
+        <button id="sample">Try sample photos</button>
+      </div>
+      <div class="small">Your photos never leave this device. Nothing is uploaded; all the checking happens in this page.</div>
+    </div>
+  </section>
+
+  <section class="panel" id="report" aria-labelledby="h-report" hidden>
+    <h2 id="h-report">2. What a stranger could learn</h2>
+    <p class="verdict" id="verdict" role="status"></p>
+    <p class="small" id="subverdict" style="margin:4px 0 14px"></p>
+    <div class="places" id="placesWrap">
+      <div><svg id="map" viewBox="0 0 520 340" role="img" aria-labelledby="mapTitle"><title id="mapTitle">Map of places your photos reveal</title></svg><p class="small" style="margin:6px 0 0">Dots are photos, placed by their hidden coordinates. Circles are places you return to. No map tiles are loaded, so nothing is sent anywhere.</p></div>
+      <div id="places"></div>
+    </div>
+  </section>
+
+  <section class="panel" id="photosPanel" aria-labelledby="h-photos" hidden>
+    <h2 id="h-photos">Each photo</h2>
+    <div class="grid" id="photos"></div>
+  </section>
+
+  <section class="panel" id="cleanPanel" aria-labelledby="h-clean" hidden>
+    <h2 id="h-clean">3. Make clean copies</h2>
+    <p class="small" style="margin-top:0">Breadcrumbs redraws each photo as a new JPEG with no hidden details, then reads the new file back to prove nothing is left. Your originals are not changed.</p>
+    <div class="row"><button class="primary" id="clean">Make clean copies</button></div>
+    <div id="cleanResult" style="margin-top:12px"></div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-limits">
+    <h2 id="h-limits">What Breadcrumbs does not catch</h2>
+    <ul class="small" style="margin:0;padding-left:18px;display:grid;gap:4px">
+      <li>Things you can see in the picture: house numbers, street signs, school logos, a view from your window.</li>
+      <li>Breadcrumbs reads hidden details from JPEG, PNG, WebP and HEIC. It can't redraw HEIC or RAW files into clean copies, so export those as JPEG first.</li>
+      <li>On iPhone, the browser's photo picker may convert photos and drop their location before Breadcrumbs sees them. The same photo sent as an email attachment can still carry it. Check the files you will actually send.</li>
+      <li>Clean copies use the standard sRGB colors, so photos from wide-color cameras may look slightly less vivid. Privacy browsers that block canvas (Tor, Firefox with fingerprinting resistance) may produce blank copies.</li>
+      <li>Some apps remove location when you post. Many ways of sharing keep it: email attachments, "send as file" in chat apps, cloud links, and some marketplaces and forums.</li>
+    </ul>
+  </section>
+</div>
+<script>
+"use strict";
+const SAMPLES=/*SAMPLES*/[];
+const CAN_DOWNLOAD=/*CAN_DOWNLOAD*/true;
+const $=id=>document.getElementById(id);
+let photos=[]; // {name,url,blob,meta}
+
+// ---------- metadata readers: JPEG, PNG, WebP, HEIC/HEIF (Exif + XMP), all feeding one TIFF parser ----------
+const LATIN=new TextDecoder("latin1");
+const latin=(u8,a,b)=>LATIN.decode(u8.subarray(a,Math.min(b,u8.length)));
+const newMeta=format=>({format,checked:true,blocks:[],fieldCount:0});
+function readExif(buf){
+  const v=new DataView(buf),u8=new Uint8Array(buf);
+  let meta;
+  try{
+    if(v.byteLength>=4&&v.getUint16(0)===0xFFD8)meta=readJpeg(v,u8);
+    else if(v.byteLength>=8&&v.getUint32(0)===0x89504E47)meta=readPng(v,u8);
+    else if(v.byteLength>=12&&v.getUint32(0)===0x52494646&&v.getUint32(8)===0x57454250)meta=readWebp(v,u8);
+    else if(v.byteLength>=12&&v.getUint32(4)===0x66747970)meta=readHeif(v,u8);
+    else return{format:"unknown",checked:false,blocks:[]};
+  }catch(e){return{format:"unreadable",checked:false,blocks:[]}}
+  // Safety net: XMP location can sit anywhere (sidecar-style packets, HEIF mime items). Scan the raw bytes for it.
+  if(meta.lat===undefined){const s=latin(u8,0,Math.min(u8.length,16*1024*1024));if(s.includes("GPSLatitude")){scanXmp(s,meta);if(!meta.blocks.includes("XMP"))meta.blocks.push("XMP");
+    // A location field is there but in a form we can't decode: never call that safe.
+    if(meta.lat===undefined){meta.checked=false;meta.gpsUnread=true}}}
+  return meta;
+}
+function readJpeg(v,u8){
+  const meta=newMeta("jpeg");let p=2;
+  while(p+4<=v.byteLength&&v.getUint8(p)===0xFF){
+    const m=v.getUint8(p+1);
+    if(m===0xD8||m===0x01||(m>=0xD0&&m<=0xD7)){p+=2;continue}
+    if(m===0xD9||m===0xDA)break; // end, or compressed image data follows
+    const len=v.getUint16(p+2),s=p+4,e=Math.min(v.byteLength,p+2+len);
+    if(m===0xE1){
+      if(len>8&&v.getUint32(s)===0x45786966){meta.blocks.push("Exif");parseTiff(v,s+6,meta)}
+      else{const t=latin(u8,s,e);if(t.startsWith("http://ns.adobe.com/x")){meta.blocks.push("XMP");scanXmp(t,meta)}else meta.blocks.push("APP1 data")}
+    }
+    else if(m===0xED)meta.blocks.push("IPTC");
+    else if(m===0xFE)meta.blocks.push("Comment");
+    else if(m===0xE0){if(latin(u8,s,s+4)!=="JFIF"&&latin(u8,s,s+4)!=="JFXX")meta.blocks.push("APP0 data")}
+    else if(m===0xE2){if(latin(u8,s,s+11)!=="ICC_PROFILE")meta.blocks.push("APP2 data")}
+    else if(m===0xEE){if(latin(u8,s,s+5)!=="Adobe")meta.blocks.push("APP14 data")}
+    else if(m>=0xE3&&m<=0xEF)meta.blocks.push("APP"+(m-0xE0)+" data");
+    p+=2+len;
+  }
+  return meta;
+}
+function readPng(v,u8){
+  const meta=newMeta("png");let p=8;
+  while(p+8<=v.byteLength){
+    const len=v.getUint32(p),type=latin(u8,p+4,p+8),d=p+8;
+    if(type==="eXIf"){meta.blocks.push("Exif");parseTiff(v,latin(u8,d,d+4)==="Exif"?d+6:d,meta)}
+    else if(type==="iTXt"||type==="tEXt"||type==="zTXt"){const t=latin(u8,d,d+len);if(t.startsWith("XML:com.adobe.xmp")){meta.blocks.push("XMP");scanXmp(t,meta)}else meta.blocks.push("Text")}
+    else if(type==="IEND")break;
+    p=d+len+4;
+  }
+  return meta;
+}
+function readWebp(v,u8){
+  const meta=newMeta("webp");let p=12;
+  while(p+8<=v.byteLength){
+    const type=latin(u8,p,p+4),len=v.getUint32(p+4,true),d=p+8;
+    if(type==="EXIF"){meta.blocks.push("Exif");parseTiff(v,latin(u8,d,d+4)==="Exif"?d+6:d,meta)}
+    else if(type==="XMP "){meta.blocks.push("XMP");scanXmp(latin(u8,d,d+len),meta)}
+    p=d+len+(len&1);
+  }
+  return meta;
+}
+function boxes(v,start,end){
+  const out=[];let p=start;
+  while(p+8<=end){let size=v.getUint32(p),h=8;const type=String.fromCharCode(v.getUint8(p+4),v.getUint8(p+5),v.getUint8(p+6),v.getUint8(p+7));
+    if(size===1){size=Number(v.getBigUint64(p+8));h=16}else if(size===0)size=end-p;
+    if(size<h||p+size>end)break;out.push({type,data:p+h,end:p+size});p+=size}
+  return out;
+}
+// HEIC/HEIF (iPhone default): find the item whose type is "Exif" in meta/iinf, locate its bytes via meta/iloc.
+function readHeif(v,u8){
+  const meta=newMeta("heif");
+  const mb=boxes(v,0,v.byteLength).find(b=>b.type==="meta");if(!mb){meta.checked=false;return meta}
+  const inner=boxes(v,mb.data+4,mb.end),iinf=inner.find(b=>b.type==="iinf"),iloc=inner.find(b=>b.type==="iloc");
+  if(!iinf||!iloc){meta.checked=false;return meta}
+  let p=iinf.data+4+(v.getUint8(iinf.data)===0?2:4),exifId=null;
+  for(const b of boxes(v,p,iinf.end)){if(b.type!=="infe")continue;const ver=v.getUint8(b.data);if(ver<2)continue;let q=b.data+4;const id=ver===2?v.getUint16(q):v.getUint32(q);q+=(ver===2?2:4)+2;if(latin(u8,q,q+4)==="Exif")exifId=id}
+  if(exifId===null)return meta;
+  const lv=v.getUint8(iloc.data);let q=iloc.data+4;const a=v.getUint8(q),b2=v.getUint8(q+1);q+=2;
+  const offS=a>>4,lenS=a&15,baseS=b2>>4,idxS=(lv===1||lv===2)?(b2&15):0;
+  const rd=sz=>{let x=0;if(sz===2)x=v.getUint16(q);else if(sz===4)x=v.getUint32(q);else if(sz===8)x=Number(v.getBigUint64(q));q+=sz;return x};
+  const cnt=lv<2?v.getUint16(q):v.getUint32(q);q+=lv<2?2:4;
+  for(let i=0;i<cnt;i++){
+    const id=lv<2?v.getUint16(q):v.getUint32(q);q+=lv<2?2:4;
+    const method=(lv===1||lv===2)?(v.getUint16(q)&15):0;if(lv===1||lv===2)q+=2;
+    q+=2;const base=rd(baseS),ec=v.getUint16(q);q+=2;let first=null;
+    for(let e=0;e<ec;e++){if(idxS)rd(idxS);const off=rd(offS),len=rd(lenS);if(!first)first={off:base+off,len}}
+    if(id===exifId&&first){if(method!==0){meta.checked=false;return meta}meta.blocks.push("Exif");parseTiff(v,first.off+4+v.getUint32(first.off),meta);break}
+  }
+  return meta;
+}
+function scanXmp(s,meta){
+  const g=k=>{const m=s.match(new RegExp(k+'\\s*(?:=\\s*["\']|>)([^"\'<]+)'));return m&&m[1]};
+  const coord=x=>{const m=x&&x.trim().match(/^(\d+),(\d+(?:\.\d+)?)(?:,(\d+(?:\.\d+)?))?([NSEW])$/);if(!m)return null;let r=+m[1]+(+m[2])/60+(m[3]?+m[3]/3600:0);return m[4]==="S"||m[4]==="W"?-r:r};
+  const la=coord(g("exif:GPSLatitude")),lo=coord(g("exif:GPSLongitude"));
+  if(meta.lat===undefined&&la!==null&&lo!==null&&!(la===0&&lo===0)){meta.lat=la;meta.lon=lo;meta.xmpGps=true}
+  if(!meta.time){const d=g("(?:exif:DateTimeOriginal|xmp:CreateDate|photoshop:DateCreated)");const t=d&&new Date(d);if(t&&!isNaN(t))meta.time=t}
+  if(!meta.model){const m=g("tiff:Model");if(m)meta.model=m}
+}
+function parseTiff(v,t,meta){
+  const le=v.getUint16(t)===0x4949;
+  const u16=o=>v.getUint16(t+o,le), u32=o=>v.getUint32(t+o,le);
+  const TYPE={1:1,2:1,3:2,4:4,5:8,7:1,9:4,10:8};
+  function readIfd(off){
+    const out={}; if(off<8||t+off+2>v.byteLength)return out;
+    const n=u16(off);
+    for(let i=0;i<n;i++){
+      const e=off+2+i*12; if(t+e+12>v.byteLength)break;
+      const tag=u16(e),type=u16(e+2),count=u32(e+4),size=(TYPE[type]||1)*count;
+      const vo=size>4?u32(e+8):e+8; if(t+vo+size>v.byteLength)continue;
+      let val;
+      if(type===2){let s="";for(let k=0;k<count;k++){const c=v.getUint8(t+vo+k);if(!c)break;s+=String.fromCharCode(c)}val=s.trim()}
+      else if(type===5||type===10){val=[];for(let k=0;k<count;k++){const a=type===5?u32(vo+8*k):v.getInt32(t+vo+8*k,le),b=type===5?u32(vo+8*k+4):v.getInt32(t+vo+8*k+4,le);val.push(b?a/b:0)}}
+      else if(type===3)val=count===1?u16(vo):[...Array(count)].map((_,k)=>u16(vo+2*k));
+      else if(type===4)val=count===1?u32(vo):[...Array(count)].map((_,k)=>u32(vo+4*k));
+      else val=null;
+      out[tag]=val;
+    }
+    return out;
+  }
+  const ifd0=readIfd(u32(4));
+  const exif=ifd0[0x8769]?readIfd(ifd0[0x8769]):{};
+  const gps=ifd0[0x8825]?readIfd(ifd0[0x8825]):{};
+  if(ifd0[0x010F])meta.make=ifd0[0x010F];
+  if(ifd0[0x0110])meta.model=ifd0[0x0110];
+  const ts=exif[0x9003]||exif[0x9004]||ifd0[0x0132];
+  if(ts){const m=String(ts).match(/(\d{4}):(\d\d):(\d\d) (\d\d):(\d\d):(\d\d)/);if(m)meta.time=new Date(+m[1],m[2]-1,+m[3],+m[4],+m[5],+m[6])}
+  if(Array.isArray(gps[2])&&Array.isArray(gps[4])&&gps[2].length===3&&gps[4].length===3){
+    const dec=a=>a[0]+a[1]/60+a[2]/3600;
+    let lat=dec(gps[2]),lon=dec(gps[4]);
+    if(gps[1]==="S")lat=-lat; if(gps[3]==="W")lon=-lon;
+    if(isFinite(lat)&&isFinite(lon)&&!(lat===0&&lon===0)&&Math.abs(lat)<=90&&Math.abs(lon)<=180)meta.lat=lat,meta.lon=lon,meta.xmpGps=false;
+  }
+  meta.fieldCount=Object.keys(ifd0).length+Object.keys(exif).length+Object.keys(gps).length;
+}
+
+// ---------- geometry ----------
+const R=6371000;
+function dist(a,b){const toR=x=>x*Math.PI/180;const dLat=toR(b.lat-a.lat),dLon=toR(b.lon-a.lon);const h=Math.sin(dLat/2)**2+Math.cos(toR(a.lat))*Math.cos(toR(b.lat))*Math.sin(dLon/2)**2;return 2*R*Math.asin(Math.sqrt(h))}
+function clusters(pts,th=120){
+  const seen=new Set(),out=[];
+  pts.forEach((p,i)=>{
+    if(seen.has(i))return; const group=[i]; seen.add(i);
+    for(let k=0;k<group.length;k++)pts.forEach((q,j)=>{if(!seen.has(j)&&dist(pts[group[k]],q)<=th){seen.add(j);group.push(j)}});
+    const members=group.map(g=>pts[g]);
+    const c={lat:members.reduce((s,m)=>s+m.lat,0)/members.length,lon:members.reduce((s,m)=>s+m.lon,0)/members.length};
+    const radius=Math.max(...members.map(m=>dist(c,m)));
+    out.push({members,center:c,radius});
+  });
+  return out.sort((a,b)=>b.members.length-a.members.length);
+}
+function classify(cl){
+  const times=cl.members.map(m=>m.time).filter(Boolean);
+  const day=t=>t.toDateString();
+  const nightT=times.filter(t=>t.getHours()>=19||t.getHours()<8), workT=times.filter(t=>t.getDay()>=1&&t.getDay()<=5&&t.getHours()>=8&&t.getHours()<17);
+  const night=nightT.length, workday=workT.length, n=cl.members.length;
+  // Need a pattern, not a coincidence: at least 2 such photos on 2 different days, and at least half of everything taken here.
+  if(night>=2&&new Set(nightT.map(day)).size>=2&&night/n>=0.5)return{label:"May be your home",home:true,why:`${night} of ${n} photos here were taken in the evening or early morning, on ${new Set(nightT.map(day)).size} different days`};
+  if(workday>=2&&new Set(workT.map(day)).size>=2&&workday/n>=0.5)return{label:"May be your school or work",why:`${workday} of ${n} photos here were taken on weekdays during the day, on ${new Set(workT.map(day)).size} different days`};
+  if(n>=2)return{label:"A place you return to",why:`${n} photos were taken here on different occasions`};
+  return{label:"A place you visited",why:"1 photo was taken here"};
+}
+
+// ---------- rendering ----------
+const fmtTime=t=>t.toLocaleString(undefined,{weekday:"short",month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]))}
+function render(){
+  $("report").hidden=$("photosPanel").hidden=$("cleanPanel").hidden=!photos.length;
+  if(!photos.length)return;
+  const located=photos.filter(p=>p.meta.lat!==undefined);
+  const timed=photos.filter(p=>p.meta.time).length, device=photos.filter(p=>p.meta.model||p.meta.make).length;
+  const pts=located.map(p=>({lat:p.meta.lat,lon:p.meta.lon,time:p.meta.time,name:p.name}));
+  const cls=clusters(pts).map(c=>({...c,...classify(c)}));
+  const home=cls.find(c=>c.home);
+  const unchecked=photos.filter(p=>!p.meta.checked).length;
+  if(located.length){$("verdict").className="verdict bad";$("verdict").textContent=home?`These photos may point to your home, within about ${Math.max(5,Math.round(home.radius/5)*5)} m.`:`${located.length} of ${photos.length} photos reveal exactly where they were taken.`}
+  else if(unchecked){$("verdict").className="verdict bad";$("verdict").textContent=(photos.length===1?"This photo couldn't be checked":`${unchecked} of ${photos.length} photos couldn't be checked`)+", so a location may still be hidden inside."}
+  else{$("verdict").className="verdict good";$("verdict").textContent=(photos.length===1?"This photo doesn't reveal where it was taken.":`None of these ${photos.length} photos reveal where they were taken.`)}
+  $("subverdict").textContent=`${located.length} of ${photos.length} reveal a location · ${timed} reveal the date and time · ${device} reveal the phone model`+(unchecked?` · ${unchecked} couldn't be checked`+(photos.some(p=>p.meta.gpsUnread)?" (one or more have a location field that couldn't be decoded; treat those as revealing a location)":" (convert them to JPEG and check again)")+".":".");
+  $("placesWrap").hidden=!located.length;
+  drawMap(pts,cls);
+  $("places").innerHTML=cls.map((c,i)=>`<div class="place"><div><span class="tag loc">${esc(c.label)}</span></div><div>${esc(c.why)}. All ${c.members.length===1?"of it is":"photos are"} within ${Math.max(5,Math.round(c.radius))} m of one point.</div><div class="kv mono">${c.center.lat.toFixed(5)}, ${c.center.lon.toFixed(5)}</div><div class="small">Place ${String.fromCharCode(65+i)} on the map · <button class="copy" data-c="${c.center.lat.toFixed(5)}, ${c.center.lon.toFixed(5)}" style="padding:2px 8px;font-size:13px">Copy coordinates</button> Pasting them into a map site sends them to that site.</div></div>`).join("");
+  $("places").querySelectorAll(".copy").forEach(b=>b.addEventListener("click",()=>{const t=b.dataset.c;navigator.clipboard.writeText(t).then(()=>{b.textContent="Copied"},()=>{b.textContent=t})}));
+  $("photos").innerHTML=photos.map(p=>{
+    const m=p.meta,tags=[];
+    if(m.lat!==undefined)tags.push('<span class="tag loc">Location</span>');
+    if(m.time)tags.push('<span class="tag time">Time</span>');
+    if(m.model||m.make)tags.push('<span class="tag dev">Device</span>');
+    if(!m.checked)tags.push('<span class="tag loc">Not checked</span>');
+    else if(!tags.length)tags.push(m.blocks.length?'<span class="tag safe">No location, time or device</span>':'<span class="tag safe">Nothing hidden</span>');
+    const lines=[];
+    if(m.lat!==undefined)lines.push(`Taken at ${m.lat.toFixed(5)}, ${m.lon.toFixed(5)}`+(m.xmpGps?" (found in XMP data)":""));
+    if(m.time)lines.push(`On ${fmtTime(m.time)}`);
+    if(m.model||m.make)lines.push(`Taken with: ${[m.make,m.model].filter(Boolean).join(" ")}`);
+    if(m.gpsUnread)lines.push("This file has a location field Breadcrumbs couldn't decode, so treat it as revealing where it was taken.");
+    else if(!m.checked)lines.push("Breadcrumbs couldn't read this file's hidden details, so its location may still be inside. Export it as JPEG and check again.");
+    else if(m.blocks.length&&!tags.some(t=>/Location|Time|Device/.test(t)))lines.push("Hidden blocks: "+[...new Set(m.blocks)].join(", "));
+    return `<article class="card"><img src="${p.url}" alt="${esc(p.name)}"><div class="body"><div class="name">${esc(p.name)}</div><div class="row" style="gap:6px">${tags.join("")}</div>${lines.map(l=>`<div class="kv">${esc(l)}</div>`).join("")}</div></article>`;
+  }).join("");
+}
+function drawMap(pts,cls){
+  const svg=$("map"),W=520,H=340,pad=40;
+  svg.querySelectorAll(":not(title)").forEach(n=>n.remove());
+  if(!pts.length)return;
+  const c0={lat:pts.reduce((s,p)=>s+p.lat,0)/pts.length,lon:pts.reduce((s,p)=>s+p.lon,0)/pts.length};
+  const xy=p=>({x:(p.lon-c0.lon)*Math.PI/180*R*Math.cos(c0.lat*Math.PI/180),y:-(p.lat-c0.lat)*Math.PI/180*R});
+  const all=pts.map(xy).concat(cls.map(c=>xy(c.center)));
+  const xs=all.map(a=>a.x),ys=all.map(a=>a.y);
+  const spanX=Math.max(60,Math.max(...xs)-Math.min(...xs)),spanY=Math.max(60,Math.max(...ys)-Math.min(...ys));
+  const s=Math.min((W-2*pad)/spanX,(H-2*pad-20)/spanY);
+  const cx=(Math.max(...xs)+Math.min(...xs))/2,cy=(Math.max(...ys)+Math.min(...ys))/2;
+  const P=p=>{const a=xy(p);return{x:W/2+(a.x-cx)*s,y:(H-20)/2+(a.y-cy)*s}};
+  const ns="http://www.w3.org/2000/svg",el=(n,a)=>{const e=document.createElementNS(ns,n);for(const k in a)e.setAttribute(k,a[k]);svg.appendChild(e);return e};
+  const css=getComputedStyle(document.documentElement),col=k=>css.getPropertyValue(k).trim();
+  cls.forEach((c,i)=>{const p=P(c.center);el("circle",{cx:p.x,cy:p.y,r:Math.max(14,c.radius*s+10),fill:"none",stroke:col("--loc"),"stroke-width":2,"stroke-dasharray":c.members.length>1?"0":"4 4"});
+    const t=el("text",{x:p.x+Math.max(14,c.radius*s+10)+6,y:p.y+5,fill:col("--fg"),"font-size":15,"font-weight":700});t.textContent=String.fromCharCode(65+i)});
+  pts.forEach(pt=>{const p=P(pt);el("circle",{cx:p.x,cy:p.y,r:5,fill:col("--loc"),stroke:col("--panel"),"stroke-width":1.5})});
+  // scale bar: a round number of meters about a fifth of the width
+  const target=(W/5)/s,mag=Math.pow(10,Math.floor(Math.log10(target))),m=[1,2,5,10].map(k=>k*mag).filter(k=>k<=target).pop()||mag;
+  const len=m*s;el("line",{x1:16,y1:H-16,x2:16+len,y2:H-16,stroke:col("--fg"),"stroke-width":3});
+  const lt=el("text",{x:16,y:H-24,fill:col("--muted"),"font-size":12});lt.textContent=m>=1000?(m/1000)+" km":m+" m";
+}
+
+// ---------- loading ----------
+function resetPhotos(){photos.forEach(p=>URL.revokeObjectURL(p.url));photos=[];$("cleanResult").innerHTML="";render()}
+async function addFiles(list){
+  if(!list.length){$("report").hidden=false;$("placesWrap").hidden=true;$("subverdict").textContent="";$("verdict").className="verdict bad";$("verdict").textContent="No photos were added. Only image files are read; try choosing them with the button instead.";return}
+  for(const f of list){
+    const buf=await f.arrayBuffer();
+    let meta={}; try{meta=readExif(buf)}catch(e){meta={}}
+    photos.push({name:f.name,url:URL.createObjectURL(f),blob:f,meta,type:f.type});
+  }
+  render(); $("report").scrollIntoView({behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth"});
+}
+async function loadSamples(){
+  resetPhotos();
+  const files=SAMPLES.map(s=>{const bin=atob(s.data.split(",")[1]);const u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return new File([u],s.name,{type:"image/jpeg"})});
+  return addFiles(files);
+}
+$("files").addEventListener("change",e=>{resetPhotos();addFiles([...e.target.files])});
+$("sample").addEventListener("click",loadSamples);
+const drop=$("drop");
+["dragenter","dragover"].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.add("over")}));
+["dragleave","drop"].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.remove("over")}));
+// Keep files with an empty type too (HEIC on Windows often has none); the reader decides by the file's bytes.
+drop.addEventListener("drop",e=>{resetPhotos();addFiles([...e.dataTransfer.files].filter(f=>!f.type||f.type.startsWith("image/")))});
+
+// ---------- cleaning ----------
+async function cleanOne(p){
+  const bmp=await createImageBitmap(p.blob,{imageOrientation:"from-image"});
+  const c=document.createElement("canvas");c.width=bmp.width;c.height=bmp.height;c.getContext("2d").drawImage(bmp,0,0);
+  const blob=await new Promise(r=>c.toBlob(r,"image/jpeg",0.92));
+  bmp.close&&bmp.close();
+  const after=readExif(await blob.arrayBuffer());
+  const m=p.name.match(/^(.*?)(?:\.([^.]+))?$/),ext=(m[2]||"").toLowerCase();
+  return{blob,after,name:m[1]+(ext&&ext!=="jpg"&&ext!=="jpeg"?"-"+ext:"")+"-clean.jpg"};
+}
+$("clean").addEventListener("click",async()=>{
+  if(!photos.length)return;
+  const out=$("cleanResult");out.textContent="Cleaning…";
+  const before={loc:photos.filter(p=>p.meta.lat!==undefined).length,time:photos.filter(p=>p.meta.time).length,dev:photos.filter(p=>p.meta.model||p.meta.make).length};
+  const res=[];for(const p of photos){try{res.push(await cleanOne(p))}catch(e){res.push({error:true,name:p.name})}}
+  const ok=res.filter(r=>!r.error), failed=res.length-ok.length;
+  const seen={};ok.forEach(r=>{const k=r.name.toLowerCase();if(seen[k]){seen[k]++;r.name=r.name.replace(/-clean\.jpg$/,"-"+seen[k]+"-clean.jpg")}else seen[k]=1});
+  // Verified means: the new file has no metadata blocks at all, only image data, the JFIF header and a color profile.
+  const leftover=ok.filter(r=>r.after.blocks.length||r.after.lat!==undefined||r.after.time||r.after.model||!r.after.checked);
+  const after={loc:ok.filter(r=>r.after.lat!==undefined).length,time:ok.filter(r=>r.after.time).length,dev:ok.filter(r=>r.after.model||r.after.make).length};
+  out.innerHTML=`<div class="compare"><div><div class="small">Before</div><div class="big" style="color:var(--loc)">${before.loc} of ${photos.length}</div><div>reveal a location · ${before.time} reveal the time · ${before.dev} reveal the phone</div></div><div><div class="small">After (each new file read back, block by block)</div><div class="big" style="color:${leftover.length||failed?"var(--loc)":"var(--safe)"}">${after.loc+failed} of ${photos.length}</div><div>reveal a location${failed?" or weren't cleaned":""} · ${after.time} reveal the time · ${after.dev} reveal the phone. ${!ok.length?"No clean copies were made.":leftover.length?leftover.length+" still carry hidden blocks.":"No Exif, XMP, IPTC or comment blocks are left in any clean copy."}${failed?` ${failed} photo${failed>1?"s weren't":" wasn't"} cleaned because the browser couldn't redraw ${failed>1?"them":"it"}.`:""}</div></div></div>
+  <p class="small">Save the clean copies, and share those instead of the originals.</p><div class="row" id="dl"></div>${res.some(r=>r.error)?'<p class="small">Some files could not be redrawn, so no clean copy was made for them. They may be in a format this browser cannot open.</p>':""}`;
+  const dl=$("dl");
+  ok.forEach(r=>{const url=URL.createObjectURL(r.blob);
+    if(CAN_DOWNLOAD){const a=document.createElement("a");a.className="btn";a.href=url;a.download=r.name;a.textContent="Save "+r.name;dl.appendChild(a)}
+    else{const f=document.createElement("figure");f.style.margin="0";f.style.width="140px";f.innerHTML=`<img src="${url}" alt="Clean copy of ${esc(r.name)}" style="width:100%;border-radius:6px"><figcaption class="small">${esc(r.name)}</figcaption>`;dl.appendChild(f)}});
+  if(!CAN_DOWNLOAD)dl.insertAdjacentHTML("beforebegin",'<p class="small">Right-click or long-press a clean copy to save it.</p>');
+});
+window.Breadcrumbs={readExif,clusters,classify,get photos(){return photos}};
+</script>
+</body>
+</html>
